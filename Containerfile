@@ -22,7 +22,7 @@ COPY --from=bootstrap /target /target
 COPY noextract.conf /target/etc/xbps.d/noextract.conf
 RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache-${LIBC} \
   . /bootstrap/setup.sh; \
-  XBPS_TARGET_ARCH=${ARCH} xbps-install -y \
+  XBPS_TARGET_ARCH=${ARCH} xbps-install -Sy \
     -R "${REPO}" \
     -r /target \
     xbps base-files dash coreutils grep run-parts sed gawk
@@ -35,7 +35,7 @@ COPY --from=bootstrap /target /target
 COPY noextract.conf /target/etc/xbps.d/noextract.conf
 RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache-${LIBC} \
   . /bootstrap/setup.sh; \
-  XBPS_TARGET_ARCH=${ARCH} xbps-install -y \
+  XBPS_TARGET_ARCH=${ARCH} xbps-install -Sy \
     -R "${REPO}" \
     -r /target \
     xbps base-files busybox-huge
@@ -47,21 +47,20 @@ ARG LIBC
 COPY --from=bootstrap /target /target
 RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache-${LIBC} \
   . /bootstrap/setup.sh; \
-  XBPS_TARGET_ARCH=${ARCH} xbps-install -y \
+  XBPS_TARGET_ARCH=${ARCH} xbps-install -Sy \
     -R "${REPO}" \
     -r /target \
     base-container
 
 FROM scratch AS image-default
-COPY --link --from=install-default /target /
+COPY --from=install-default /target /
 RUN \
   install -dm1777 tmp; \
   xbps-reconfigure -fa; \
   rm -rf /var/cache/xbps/*
-CMD ["/bin/sh"]
 
 FROM scratch AS image-busybox
-COPY --link --from=install-busybox /target /
+COPY --from=install-busybox /target /
 RUN \
   for util in $(/usr/bin/busybox --list); do \
     [ ! -f "/usr/bin/$util" ] && /usr/bin/busybox ln -sfv busybox "/usr/bin/$util"; \
