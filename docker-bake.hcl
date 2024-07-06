@@ -1,5 +1,5 @@
 variable "MIRROR" {
-  default = "https://repo-ci.voidlinux.org/"
+  default = "https://repo-default.voidlinux.org/"
 }
 
 target "docker-metadata-action" {}

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-: "${MIRROR:=https://repo-ci.voidlinux.org/}"
+: "${MIRROR:=https://repo-default.voidlinux.org/}"
 
 suffix() {
 	case "${LIBC:?}" in

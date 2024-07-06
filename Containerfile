@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM --platform=${BUILDPLATFORM} alpine:3.18 AS bootstrap
 ARG TARGETPLATFORM
-ARG MIRROR=https://repo-ci.voidlinux.org
+ARG MIRROR=https://repo-default.voidlinux.org
 ARG LIBC
 RUN apk add ca-certificates curl && \
   curl "${MIRROR}/static/xbps-static-static-0.59_5.$(uname -m)-musl.tar.xz" | tar vJx
