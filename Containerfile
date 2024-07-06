@@ -71,9 +71,18 @@ RUN \
 CMD ["/bin/sh"]
 
 FROM scratch AS image-full
-COPY --link --from=install-full /target /
+COPY --from=install-full /target /
 RUN \
   install -dm1777 tmp; \
   xbps-reconfigure -fa; \
   rm -rf /var/cache/xbps/*
 CMD ["/bin/sh"]
+
+FROM image-full as image-full-ssh
+RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils
+RUN useradd -G users -m void; \
+  mkdir -p /root/.ssh /home/void/.ssh; \
+  echo "echo \$PUBLIC_KEY | tee /root/.ssh/authorized_keys > /home/void/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh.sh; \
+  cd /etc/runit/runsvdir/current && ln -s /etc/sv/sshd .
+EXPOSE 22
+ENTRYPOINT ["/sbin/runit-init"]
