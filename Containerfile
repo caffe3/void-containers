@@ -79,7 +79,7 @@ RUN \
 CMD ["/bin/sh"]
 
 FROM image-full as image-full-ssh
-RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils git && \
+RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils curl git bash && \
   xbps-remove -o
 RUN mkdir -p /root/.ssh; \
   echo "echo \$PUBLIC_KEY > /root/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-root.sh; \
@@ -91,5 +91,7 @@ FROM image-full-ssh as image-full-builder
 RUN useradd -G users -s /bin/sh -m void; \
   mkdir -p /home/void/.ssh; \
   echo "echo \$PUBLIC_KEY > /home/void/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-void.sh
-RUN cd /home/void; \
-  su void -c 'git clone https://github.com/void-linux/void-packages'
+RUN cd /home/void && \
+  su void -c 'curl -L https://github.com/void-linux/void-packages/archive/refs/heads/master.tar.gz | tar zxf -'
+RUN cd /home/void/void-packages-master && \
+  su void -c './xbps-src binary-bootstrap'
