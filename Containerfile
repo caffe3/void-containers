@@ -78,7 +78,38 @@ RUN \
   rm -rf /var/cache/xbps/*
 CMD ["/bin/sh"]
 
-FROM image-full as image-full-ssh
+FROM image-full AS image-full-cuda
+RUN xbps-install -Sy apt dpkg gnupg
+RUN mkdir -p /var/lib/dpkg
+COPY --from=nvidia/cuda:12.6.3-base-ubuntu24.04 /etc/apt /etc/apt
+COPY --from=nvidia/cuda:12.6.3-base-ubuntu24.04 /etc/debian_version /etc/debian_version
+COPY --from=nvidia/cuda:12.6.3-base-ubuntu24.04 /usr/share/keyrings /usr/share/keyrings
+RUN apt-get -y --no-install-recommends update
+RUN apt-get -y --no-install-recommends install cuda-minimal-build-12-6
+CMD ["/bin/sh"]
+
+FROM image-full-cuda AS image-full-cuda-pytorch
+RUN xbps-install -Sy python3 python3-pip python3-wheel
+RUN pip3 --no-cache-dir install \
+  nvidia-nvtx-cu12 \
+  nvidia-nvjitlink-cu12 \
+  nvidia-nccl-cu12 \
+  nvidia-curand-cu12 \
+  nvidia-cufft-cu12 \
+  nvidia-cuda-runtime-cu12 \
+  nvidia-cuda-nvrtc-cu12 \
+  nvidia-cuda-cupti-cu12 \
+  nvidia-cublas-cu12 \
+  nvidia-cusparse-cu12 \
+  nvidia-cudnn-cu12 \
+  nvidia-cusolver-cu12 \
+  --index-url https://download.pytorch.org/whl/nightly/cu126
+RUN pip3 --no-cache-dir install \
+  torch torchvision torchaudio \
+  --index-url https://download.pytorch.org/whl/nightly/cu126
+CMD ["/bin/sh"]
+
+FROM image-full AS image-full-ssh
 RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils curl git bash && \
   xbps-remove -o
 RUN mkdir -p /root/.ssh; \
@@ -87,7 +118,16 @@ RUN mkdir -p /root/.ssh; \
 EXPOSE 22
 ENTRYPOINT ["/sbin/runit-init"]
 
-FROM image-full-ssh as image-full-builder
+FROM image-full-cuda-pytorch AS image-full-cuda-pytorch-ssh
+RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils curl git bash && \
+  xbps-remove -o
+RUN mkdir -p /root/.ssh; \
+  echo "echo \$PUBLIC_KEY > /root/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-root.sh; \
+  cd /etc/runit/runsvdir/current && ln -s /etc/sv/sshd .
+EXPOSE 22
+ENTRYPOINT ["/sbin/runit-init"]
+
+FROM image-full-ssh AS image-full-builder
 RUN useradd -G users -s /bin/sh -m void; \
   mkdir -p /home/void/.ssh; \
   echo "echo \$PUBLIC_KEY > /home/void/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-void.sh
