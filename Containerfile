@@ -85,7 +85,7 @@ RUN mkdir -p /root/.ssh; \
   echo "echo \$PUBLIC_KEY > /root/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-root.sh; \
   cd /etc/runit/runsvdir/current && ln -s /etc/sv/sshd .
 EXPOSE 22
-ENTRYPOINT ["/sbin/runit-init"]
+CMD ["/sbin/runit-init"]
 
 FROM image-full-ssh AS image-full-cuda-ssh
 ARG CUDA_MAJOR
@@ -99,6 +99,8 @@ COPY --from=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION}-base-ubuntu
 COPY --from=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION}-base-ubuntu${UBUNTU_VERSION} /usr/share/keyrings /usr/share/keyrings
 RUN apt-get -y --no-install-recommends update
 RUN apt-get -y --no-install-recommends install cuda-minimal-build-12-6
+EXPOSE 22
+CMD ["/sbin/runit-init"]
 
 FROM image-full-cuda-ssh AS image-full-cuda-pytorch-ssh
 ARG PYTORCH_VERSION
@@ -123,6 +125,8 @@ RUN pip3 --no-cache-dir install \
   torch==${PYTORCH_VERSION}+cu${CUDA_MAJOR}${CUDA_MINOR} torchvision torchaudio \
   --index-url https://download.pytorch.org/whl/nightly/cu${CUDA_MAJOR}${CUDA_MINOR}
 RUN xbps-install -Syu
+EXPOSE 22
+CMD ["/sbin/runit-init"]
 
 FROM image-full-ssh AS image-full-builder
 RUN useradd -G users -s /bin/sh -m void; \
@@ -132,3 +136,5 @@ RUN cd /home/void && \
   su void -c 'curl -L https://github.com/void-linux/void-packages/archive/refs/heads/master.tar.gz | tar zxf -'
 RUN cd /home/void/void-packages-master && \
   su void -c './xbps-src binary-bootstrap'
+EXPOSE 22
+CMD ["/sbin/runit-init"]
