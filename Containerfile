@@ -125,8 +125,9 @@ RUN pip3 --no-cache-dir install \
   torch==${PYTORCH_VERSION}+cu${CUDA_MAJOR}${CUDA_MINOR} torchvision torchaudio \
   --index-url https://download.pytorch.org/whl/nightly/cu${CUDA_MAJOR}${CUDA_MINOR}
 RUN xbps-install -Syu
+COPY tini.sh /sbin/tini.sh
 EXPOSE 22
-CMD ["/sbin/runit-init"]
+CMD ["/sbin/tini.sh"]
 
 FROM image-full-ssh AS image-full-builder
 RUN useradd -G users -s /bin/sh -m void; \
