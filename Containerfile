@@ -78,37 +78,6 @@ RUN \
   rm -rf /var/cache/xbps/*
 CMD ["/bin/sh"]
 
-FROM image-full AS image-full-cuda
-RUN xbps-install -Sy apt dpkg gnupg
-RUN mkdir -p /var/lib/dpkg
-COPY --from=nvidia/cuda:12.6.3-base-ubuntu24.04 /etc/apt /etc/apt
-COPY --from=nvidia/cuda:12.6.3-base-ubuntu24.04 /etc/debian_version /etc/debian_version
-COPY --from=nvidia/cuda:12.6.3-base-ubuntu24.04 /usr/share/keyrings /usr/share/keyrings
-RUN apt-get -y --no-install-recommends update
-RUN apt-get -y --no-install-recommends install cuda-minimal-build-12-6
-CMD ["/bin/sh"]
-
-FROM image-full-cuda AS image-full-cuda-pytorch
-RUN xbps-install -Sy python3 python3-pip python3-wheel
-RUN pip3 --no-cache-dir install \
-  nvidia-nvtx-cu12 \
-  nvidia-nvjitlink-cu12 \
-  nvidia-nccl-cu12 \
-  nvidia-curand-cu12 \
-  nvidia-cufft-cu12 \
-  nvidia-cuda-runtime-cu12 \
-  nvidia-cuda-nvrtc-cu12 \
-  nvidia-cuda-cupti-cu12 \
-  nvidia-cublas-cu12 \
-  nvidia-cusparse-cu12 \
-  nvidia-cudnn-cu12 \
-  nvidia-cusolver-cu12 \
-  --index-url https://download.pytorch.org/whl/nightly/cu126
-RUN pip3 --no-cache-dir install \
-  torch torchvision torchaudio \
-  --index-url https://download.pytorch.org/whl/nightly/cu126
-CMD ["/bin/sh"]
-
 FROM image-full AS image-full-ssh
 RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils curl git bash && \
   xbps-remove -o
@@ -118,14 +87,42 @@ RUN mkdir -p /root/.ssh; \
 EXPOSE 22
 ENTRYPOINT ["/sbin/runit-init"]
 
-FROM image-full-cuda-pytorch AS image-full-cuda-pytorch-ssh
-RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils curl git bash && \
-  xbps-remove -o
-RUN mkdir -p /root/.ssh; \
-  echo "echo \$PUBLIC_KEY > /root/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-root.sh; \
-  cd /etc/runit/runsvdir/current && ln -s /etc/sv/sshd .
-EXPOSE 22
-ENTRYPOINT ["/sbin/runit-init"]
+FROM image-full-ssh AS image-full-cuda-ssh
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+ARG CUDA_REVISION
+ARG UBUNTU_VERSION
+RUN xbps-install -Sy apt dpkg gnupg
+RUN mkdir -p /var/lib/dpkg
+COPY --from=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION}-base-ubuntu${UBUNTU_VERSION} /etc/apt /etc/apt
+COPY --from=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION}-base-ubuntu${UBUNTU_VERSION} /etc/debian_version /etc/debian_version
+COPY --from=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION}-base-ubuntu${UBUNTU_VERSION} /usr/share/keyrings /usr/share/keyrings
+RUN apt-get -y --no-install-recommends update
+RUN apt-get -y --no-install-recommends install cuda-minimal-build-12-6
+
+FROM image-full-cuda-ssh AS image-full-cuda-pytorch-ssh
+ARG PYTORCH_VERSION
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+RUN xbps-install -Sy python3 python3-pip python3-wheel
+RUN pip3 --no-cache-dir install \
+  nvidia-nvtx-cu${CUDA_MAJOR} \
+  nvidia-nvjitlink-cu${CUDA_MAJOR} \
+  nvidia-nccl-cu${CUDA_MAJOR} \
+  nvidia-curand-cu${CUDA_MAJOR} \
+  nvidia-cufft-cu${CUDA_MAJOR} \
+  nvidia-cuda-runtime-cu${CUDA_MAJOR} \
+  nvidia-cuda-nvrtc-cu${CUDA_MAJOR} \
+  nvidia-cuda-cupti-cu${CUDA_MAJOR} \
+  nvidia-cublas-cu${CUDA_MAJOR} \
+  nvidia-cusparse-cu${CUDA_MAJOR} \
+  nvidia-cudnn-cu${CUDA_MAJOR} \
+  nvidia-cusolver-cu${CUDA_MAJOR} \
+  --index-url https://download.pytorch.org/whl/nightly/cu${CUDA_MAJOR}${CUDA_MINOR}
+RUN pip3 --no-cache-dir install \
+  torch==${PYTORCH_VERSION}+cu${CUDA_MAJOR}${CUDA_MINOR} torchvision torchaudio \
+  --index-url https://download.pytorch.org/whl/nightly/cu${CUDA_MAJOR}${CUDA_MINOR}
+RUN xbps-install -Syu
 
 FROM image-full-ssh AS image-full-builder
 RUN useradd -G users -s /bin/sh -m void; \
