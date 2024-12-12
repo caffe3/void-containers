@@ -1,0 +1,81 @@
+# syntax=docker/dockerfile:1
+FROM scratch AS nvidia-ubuntu-apt-24.04
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+ARG CUDA_REVISION
+COPY --from=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION}-base-ubuntu24.04 /etc/apt /etc/apt
+COPY --from=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION}-base-ubuntu24.04 /etc/debian_version /etc/debian_version
+COPY --from=nvidia/cuda:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION}-base-ubuntu24.04 /usr/share/keyrings /usr/share/keyrings
+
+FROM caffe3/void-ssh-tini-glibc:63a9c3a773 AS void-apt-cuda
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+ARG CUDA_REVISION
+ARG UBUNTU_VERSION
+USER root
+RUN xbps-install -Sy apt dpkg gnupg base-devel
+RUN mkdir -p /var/lib/dpkg
+COPY --from=nvidia-ubuntu-apt-${UBUNTU_VERSION} /etc/apt /etc/apt
+COPY --from=nvidia-ubuntu-apt-${UBUNTU_VERSION} /etc/debian_version /etc/debian_version
+COPY --from=nvidia-ubuntu-apt-${UBUNTU_VERSION} /usr/share/keyrings /usr/share/keyrings
+RUN useradd --badname -rM _apt
+RUN apt-get -y --no-install-recommends update
+COPY apt-dep.sh /usr/local/bin/apt-dep.sh
+RUN for p in /tmp/cuda-minimal-build /tmp/cuda-devel /tmp/cuda-nsight-compute; do mkdir -p $p; chmod a+rwx $p; done
+WORKDIR /tmp/cuda-minimal-build
+RUN apt-dep.sh 2 cuda-minimal-build-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN dpkg -i --ignore-depends=build-essential,libmount1,libgcc1,libudev1,libstdc++6,libgcc-s1,libc6 *.deb
+RUN for pkg in *.deb; do dpkg -c $pkg | awk '{print $6}' >> files.lst; done
+WORKDIR /tmp/cuda-devel
+RUN apt-dep.sh 1 cuda-cudart-dev-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN apt-dep.sh 1 cuda-command-line-tools-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN apt-dep.sh 1 cuda-libraries-dev-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN apt-dep.sh 1 cuda-nvml-dev-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN apt-dep.sh 1 libnpp-dev-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN apt-dep.sh 1 libcusparse-dev-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN apt-dep.sh 1 libcublas-dev-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN apt-dep.sh 1 libnccl-dev-${CUDA_MAJOR}-${CUDA_MINOR} | \
+  grep '\(cuda\|libcu\|libn\)' | xargs -I{} apt-get -y download {} || exit 0
+RUN apt-get -y download \
+  cuda-cudart-dev-${CUDA_MAJOR}-${CUDA_MINOR} \
+  cuda-command-line-tools-${CUDA_MAJOR}-${CUDA_MINOR} \
+  cuda-libraries-dev-${CUDA_MAJOR}-${CUDA_MINOR} \
+  cuda-nvml-dev-${CUDA_MAJOR}-${CUDA_MINOR} \
+  libnpp-dev-${CUDA_MAJOR}-${CUDA_MINOR} \
+  libcusparse-dev-${CUDA_MAJOR}-${CUDA_MINOR} \
+  libcublas-dev-${CUDA_MAJOR}-${CUDA_MINOR} \
+  libnccl-dev libnccl2 || exit 0
+RUN dpkg -i --ignore-depends=build-essential,libmount1,libgcc1,libudev1,libstdc++6,libgcc-s1,libc6 *.deb
+RUN for pkg in *.deb; do dpkg -c $pkg | awk '{print $6}' >> files.lst; done
+WORKDIR /tmp/cuda-nsight-compute
+RUN apt-get -y download \
+  cuda-nsight-compute-${CUDA_MAJOR}-${CUDA_MINOR} \
+  nsight-compute-2024.3.2
+RUN dpkg -i --ignore-depends=build-essential,libmount1,libgcc1,libudev1,libstdc++6,libgcc-s1,libc6 *.deb
+RUN for pkg in *.deb; do dpkg -c $pkg | awk '{print $6}' >> files.lst; done
+
+FROM void-apt-cuda AS void-apt-cuda-target
+RUN mkdir /target-cuda-minimal-build
+RUN mkdir /target-cuda-devel
+RUN mkdir /target-cuda-nsight-compute
+WORKDIR /
+RUN tar -cf - --no-recursion -T /tmp/cuda-minimal-build/files.lst | tar -C /target-cuda-minimal-build -xf -
+RUN tar -cf - --no-recursion -T /tmp/cuda-devel/files.lst | tar -C /target-cuda-devel -xf -
+RUN tar -cf - --no-recursion -T /tmp/cuda-nsight-compute/files.lst | tar -C /target-cuda-nsight-compute -xf -
+
+FROM scratch AS cuda-minimal-build
+COPY --from=void-apt-cuda-target /target-cuda-minimal-build /
+
+FROM scratch AS cuda-devel
+COPY --from=void-apt-cuda-target /target-cuda-devel /
+
+FROM scratch AS cuda-nsight-compute
+COPY --from=void-apt-cuda-target /target-cuda-nsight-compute /

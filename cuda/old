@@ -1,0 +1,104 @@
+FROM image-full-apt-cuda AS image-full-apt-cuda-target
+RUN mkdir /target
+WORKDIR /
+RUN tar -cf - --no-recursion -T /tmp/files.lst | tar -C /target -xf -
+
+FROM image-full AS image-full-void
+RUN useradd -G users -s /bin/sh -m void
+
+FROM image-full-void AS image-full-void-cuda
+RUN xbps-install -Sy base-devel git && xbps-remove -o
+COPY --from=image-full-apt-cuda-target /target /
+
+FROM image-full-void-cuda AS image-full-void-cuda-pytorch
+ARG PYTORCH_VERSION
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+USER root
+RUN xbps-install -Sy python3 python3-pip python3-wheel python3-virtualenv
+USER void
+WORKDIR /home/void
+RUN python3 -m venv venv
+ENV VIRTUAL_ENV=/home/void/venv
+ENV PATH="/home/void/venv/bin:$PATH"
+RUN pip3 --no-cache-dir install \
+  nvidia-nvtx-cu${CUDA_MAJOR} \
+  nvidia-nvjitlink-cu${CUDA_MAJOR} \
+  nvidia-nccl-cu${CUDA_MAJOR} \
+  nvidia-curand-cu${CUDA_MAJOR} \
+  nvidia-cufft-cu${CUDA_MAJOR} \
+  nvidia-cuda-runtime-cu${CUDA_MAJOR} \
+  nvidia-cuda-nvrtc-cu${CUDA_MAJOR} \
+  nvidia-cuda-cupti-cu${CUDA_MAJOR} \
+  nvidia-cublas-cu${CUDA_MAJOR} \
+  nvidia-cusparse-cu${CUDA_MAJOR} \
+  nvidia-cudnn-cu${CUDA_MAJOR} \
+  nvidia-cusolver-cu${CUDA_MAJOR} \
+  --index-url https://download.pytorch.org/whl/nightly/cu${CUDA_MAJOR}${CUDA_MINOR}
+RUN pip3 --no-cache-dir install \
+  torch==${PYTORCH_VERSION}+cu${CUDA_MAJOR}${CUDA_MINOR} torchvision torchaudio \
+  --index-url https://download.pytorch.org/whl/nightly/cu${CUDA_MAJOR}${CUDA_MINOR}
+
+FROM caffe3/void-cuda:983191a0ba-dirty AS image-full-void-cuda-pytorch-deps
+ARG PYTORCH_VERSION
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+USER root
+RUN xbps-install -Sy python3 python3-pip python3-wheel python3-virtualenv python3-pybind11
+RUN xbps-install -Sy libgomp-devel libnuma-devel
+USER void
+WORKDIR /home/void
+RUN python3 -m venv venv
+ENV VIRTUAL_ENV=/home/void/venv
+ENV PATH="/home/void/venv/bin:$PATH"
+RUN pip install -U pip setuptools wheel
+RUN pip install -U mkl-static mkl-include
+RUN pip install -U magma-cuda${CUDA_MAJOR}${CUDA_MINOR}
+
+FROM image-full-void-cuda-pytorch-deps AS image-full-void-cuda-pytorch
+RUN git clone https://github.com/pytorch/pytorch.git
+WORKDIR /home/void/pytorch
+RUN git submodule sync
+RUN git submodule update --init --recursive
+ENV TORCH_CUDA_ARCH_LIST="8.0 8.6 8.7 8.9"
+RUN pip install -U -r requirements.txt
+RUN make triton
+RUN python3 setup.py install
+
+FROM image-full-void AS image-full-void-ssh
+RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils curl git bash st-terminfo && \
+  xbps-remove -o
+RUN mkdir -p /root/.ssh; \
+  echo "echo \$PUBLIC_KEY > /root/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-root.sh; \
+  cd /etc/runit/runsvdir/current && ln -s /etc/sv/sshd .
+USER void
+RUN mkdir -p /home/void/.ssh; \
+  echo "echo \$PUBLIC_KEY > /home/void/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-void.sh
+EXPOSE 22
+CMD ["/sbin/runit-init"]
+
+FROM image-full-void-ssh AS image-full-void-builder
+RUN cd /home/void && \
+  su void -c 'curl -L https://github.com/void-linux/void-packages/archive/refs/heads/master.tar.gz | tar zxf -'
+RUN cd /home/void/void-packages-master && \
+  su void -c './xbps-src binary-bootstrap'
+EXPOSE 22
+CMD ["/sbin/runit-init"]
+
+FROM image-full-ssh AS image-full-ssh-tini
+COPY tini.sh /sbin/tini.sh
+EXPOSE 22
+CMD ["/sbin/tini.sh"]
+
+FROM image-full-void-cuda-pytorch AS  image-full-void-cuda-pytorch-ssh-tini
+RUN xbps-install -Sy openssh socklog socklog-void iproute2 iputils curl git bash st-terminfo && \
+  xbps-remove -o
+RUN mkdir -p /root/.ssh; \
+  echo "echo \$PUBLIC_KEY > /root/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-root.sh; \
+  cd /etc/runit/runsvdir/current && ln -s /etc/sv/sshd .
+USER void
+RUN mkdir -p /home/void/.ssh; \
+  echo "echo \$PUBLIC_KEY > /home/void/.ssh/authorized_keys" > /etc/runit/core-services/06-ssh-void.sh
+COPY tini.sh /sbin/tini.sh
+EXPOSE 22
+CMD ["/sbin/tini.sh"]

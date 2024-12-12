@@ -1,0 +1,24 @@
+FROM caffe3/void-cuda:983191a0ba-dirty AS image-full-void-cuda-pytorch-deps
+ARG PYTORCH_VERSION
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+USER root
+RUN xbps-install -Sy python3 python3-pip python3-wheel python3-virtualenv python3-pybind11
+RUN xbps-install -Sy libgomp-devel libnuma-devel
+USER void
+WORKDIR /home/void
+RUN python3 -m venv venv
+ENV VIRTUAL_ENV=/home/void/venv
+ENV PATH="/home/void/venv/bin:$PATH"
+RUN pip install -U pip setuptools wheel
+RUN pip install -U mkl-static mkl-include
+RUN conda install -U magma-cuda${CUDA_MAJOR}${CUDA_MINOR}
+FROM image-full-void-cuda-pytorch-deps AS image-full-void-cuda-pytorch
+RUN git clone https://github.com/pytorch/pytorch.git
+WORKDIR /home/void/pytorch
+RUN git submodule sync
+RUN git submodule update --init --recursive
+ENV TORCH_CUDA_ARCH_LIST="8.0 8.6 8.7 8.9"
+RUN pip install -U -r requirements.txt
+RUN make triton
+RUN python3 setup.py install
