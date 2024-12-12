@@ -1,6 +1,7 @@
 #!/bin/sh
 
 sh /etc/runit/core-services/06-ssh-root.sh
+sh /etc/runit/core-services/06-ssh-void.sh
 [ -x /etc/rc.local ] && /etc/rc.local
 
 runsvchdir default
