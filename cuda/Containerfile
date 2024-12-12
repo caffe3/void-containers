@@ -70,12 +70,3 @@ WORKDIR /
 RUN tar -cf - --no-recursion -T /tmp/cuda-minimal-build/files.lst | tar -C /target-cuda-minimal-build -xf -
 RUN tar -cf - --no-recursion -T /tmp/cuda-devel/files.lst | tar -C /target-cuda-devel -xf -
 RUN tar -cf - --no-recursion -T /tmp/cuda-nsight-compute/files.lst | tar -C /target-cuda-nsight-compute -xf -
-
-FROM scratch AS cuda-minimal-build
-COPY --from=void-apt-cuda-target /target-cuda-minimal-build /
-
-FROM scratch AS cuda-devel
-COPY --from=void-apt-cuda-target /target-cuda-devel /
-
-FROM scratch AS cuda-nsight-compute
-COPY --from=void-apt-cuda-target /target-cuda-nsight-compute /
