@@ -1,9 +1,18 @@
 # syntax=docker/dockerfile:1
 FROM scratch AS cuda-minimal-build
-COPY --from=caffe3/void-apt-cuda-target /target-cuda-minimal-build /
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+ARG CUDA_REVISION
+COPY --from=caffe3/void-apt-cuda-target:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION} /target-cuda-minimal-build /
 
 FROM scratch AS cuda-devel
-COPY --from=caffe3/void-apt-cuda-target /target-cuda-devel /
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+ARG CUDA_REVISION
+COPY --from=caffe3/void-apt-cuda-target:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION} /target-cuda-devel /
 
 FROM scratch AS cuda-nsight-compute
-COPY --from=caffe3/void-apt-cuda-target /target-cuda-nsight-compute /
+ARG CUDA_MAJOR
+ARG CUDA_MINOR
+ARG CUDA_REVISION
+COPY --from=caffe3/void-apt-cuda-target:${CUDA_MAJOR}.${CUDA_MINOR}.${CUDA_REVISION} /target-cuda-nsight-compute /
