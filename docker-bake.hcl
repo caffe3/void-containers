@@ -27,32 +27,53 @@ target "_common-musl" {
   args = { "LIBC" = "musl" }
 }
 
+target "_common-default" {
+  args = {
+    "IMAGETYPE" = "default"
+    "PACKAGES" = "xbps base-files dash coreutils grep run-parts sed gawk"
+  }
+}
+
+target "_common-busybox" {
+  args = {
+    "IMAGETYPE" = "default"
+    "PACKAGES" = "xbps base-files busybox-huge"
+  }
+}
+
+target "_common-full" {
+  args = {
+    "IMAGETYPE" = "default"
+    "PACKAGES" = "base-container"
+  }
+}
+
 target "void-glibc" {
-  inherits = ["_common-glibc"]
-  target = "image-default"
+  inherits = ["_common-glibc", "_common-default"]
+  target = "image"
 }
 
 target "void-glibc-busybox" {
-  inherits = ["_common-glibc"]
-  target = "image-busybox"
+  inherits = ["_common-glibc", "_common-busybox"]
+  target = "image"
 }
 
 target "void-glibc-full" {
-  inherits = ["_common-glibc"]
-  target = "image-full"
+  inherits = ["_common-glibc", "_common-full"]
+  target = "image"
 }
 
 target "void-musl" {
-  inherits = ["_common-musl"]
-  target = "image-default"
+  inherits = ["_common-musl", "_common-default"]
+  target = "image"
 }
 
 target "void-musl-busybox" {
-  inherits = ["_common-musl"]
-  target = "image-busybox"
+  inherits = ["_common-musl", "_common-busybox"]
+  target = "image"
 }
 
 target "void-musl-full" {
-  inherits = ["_common-musl"]
-  target = "image-full"
+  inherits = ["_common-musl", "_common-full"]
+  target = "image"
 }

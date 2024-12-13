@@ -6,7 +6,7 @@ ARG LIBC
 RUN apk add ca-certificates curl && \
   curl "${MIRROR}/static/xbps-static-static-0.59_5.$(uname -m)-musl.tar.xz" | tar vJx
 COPY keys/* /target/var/db/xbps/keys/
-COPY setup.sh /bootstrap/setup.sh
+COPY scripts/bootstrap/setup.sh /bootstrap/setup.sh
 COPY noextract-python.conf /target/etc/xbps.d/noextract-python.conf
 RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache-${LIBC} \
   . /bootstrap/setup.sh; \
@@ -14,67 +14,29 @@ RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache
     -R "${REPO}" \
     -r /target
 
-FROM --platform=${BUILDPLATFORM} bootstrap AS install-default
+FROM --platform=${BUILDPLATFORM} bootstrap AS install
 ARG TARGETPLATFORM
 ARG MIRROR
 ARG LIBC
+ARG IMAGETYPE
+ARG PACKAGES
 COPY --from=bootstrap /target /target
-COPY noextract.conf /target/etc/xbps.d/noextract.conf
+COPY xbps.d/${IMAGETYPE}.conf /target/etc/xbps.d/${IMAGETYPE}.conf
 RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache-${LIBC} \
   . /bootstrap/setup.sh; \
   XBPS_TARGET_ARCH=${ARCH} xbps-install -y \
     -R "${REPO}" \
     -r /target \
-    xbps base-files dash coreutils grep run-parts sed gawk
+    ${PACKAGES}
 
-FROM --platform=${BUILDPLATFORM} bootstrap AS install-busybox
-ARG TARGETPLATFORM
-ARG MIRROR
-ARG LIBC
-COPY --from=bootstrap /target /target
-COPY noextract.conf /target/etc/xbps.d/noextract.conf
-RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache-${LIBC} \
-  . /bootstrap/setup.sh; \
-  XBPS_TARGET_ARCH=${ARCH} xbps-install -y \
-    -R "${REPO}" \
-    -r /target \
-    xbps base-files busybox-huge
-
-FROM --platform=${BUILDPLATFORM} bootstrap AS install-full
-ARG TARGETPLATFORM
-ARG MIRROR
-ARG LIBC
-COPY --from=bootstrap /target /target
-RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache-${LIBC} \
-  . /bootstrap/setup.sh; \
-  XBPS_TARGET_ARCH=${ARCH} xbps-install -y \
-    -R "${REPO}" \
-    -r /target \
-    base-container
-
-FROM scratch AS image-default
-COPY --link --from=install-default /target /
+FROM scratch AS image
+ARG IMAGETYPE
+COPY --link --from=install /target /
+COPY scripts/post-$IMAGETYPE.sh /post.sh
 RUN \
+  . /post.sh; \
   install -dm1777 tmp; \
   xbps-reconfigure -fa; \
-  rm -rf /var/cache/xbps/*
-CMD ["/bin/sh"]
-
-FROM scratch AS image-busybox
-COPY --link --from=install-busybox /target /
-RUN \
-  for util in $(/usr/bin/busybox --list); do \
-    [ ! -f "/usr/bin/$util" ] && /usr/bin/busybox ln -sfv busybox "/usr/bin/$util"; \
-  done; \
-  install -dm1777 tmp; \
-  xbps-reconfigure -fa; \
-  rm -rf /var/cache/xbps/*
-CMD ["/bin/sh"]
-
-FROM scratch AS image-full
-COPY --link --from=install-full /target /
-RUN \
-  install -dm1777 tmp; \
-  xbps-reconfigure -fa; \
-  rm -rf /var/cache/xbps/*
+  rm -rf /var/cache/xbps/*; \
+  rm -f /post.sh
 CMD ["/bin/sh"]
