@@ -2,6 +2,10 @@ variable "MIRROR" {
   default = "https://repo-ci.voidlinux.org/"
 }
 
+variable "TAG" {
+  default = "latest"
+}
+
 target "docker-metadata-action" {}
 
 target "_common" {
@@ -29,51 +33,30 @@ target "_common-musl" {
 
 target "_common-default" {
   args = {
-    "IMAGETYPE" = "default"
     "PACKAGES" = "xbps base-files dash coreutils grep run-parts sed gawk"
   }
 }
 
 target "_common-busybox" {
   args = {
-    "IMAGETYPE" = "default"
     "PACKAGES" = "xbps base-files busybox-huge"
   }
 }
 
 target "_common-full" {
   args = {
-    "IMAGETYPE" = "default"
     "PACKAGES" = "base-container"
   }
 }
 
-target "void-glibc" {
-  inherits = ["_common-glibc", "_common-default"]
-  target = "image"
-}
-
-target "void-glibc-busybox" {
-  inherits = ["_common-glibc", "_common-busybox"]
-  target = "image"
-}
-
-target "void-glibc-full" {
-  inherits = ["_common-glibc", "_common-full"]
-  target = "image"
-}
-
-target "void-musl" {
-  inherits = ["_common-musl", "_common-default"]
-  target = "image"
-}
-
-target "void-musl-busybox" {
-  inherits = ["_common-musl", "_common-busybox"]
-  target = "image"
-}
-
-target "void-musl-full" {
-  inherits = ["_common-musl", "_common-full"]
-  target = "image"
+target "void" {
+  name = "void-${libc}${flavor=="default"?"":"-"}${replace(flavor, "default", "")}"
+  inherits = ["_common-${libc}", "_common-${flavor}"]
+  matrix = {
+    libc = ["glibc", "musl"]
+    flavor = ["default", "busybox", "full"]
+  }
+  args = {
+    "FLAVOR" = "${flavor}"
+  }
 }

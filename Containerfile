@@ -18,10 +18,10 @@ FROM --platform=${BUILDPLATFORM} bootstrap AS install
 ARG TARGETPLATFORM
 ARG MIRROR
 ARG LIBC
-ARG IMAGETYPE
+ARG FLAVOR
 ARG PACKAGES
 COPY --from=bootstrap /target /target
-COPY xbps.d/${IMAGETYPE}.conf /target/etc/xbps.d/${IMAGETYPE}.conf
+COPY xbps.d/${FLAVOR}.conf /target/etc/xbps.d/${FLAVOR}.conf
 RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache-${LIBC} \
   . /bootstrap/setup.sh; \
   XBPS_TARGET_ARCH=${ARCH} xbps-install -y \
@@ -30,9 +30,9 @@ RUN --mount=type=cache,sharing=locked,target=/target/var/cache/xbps,id=repocache
     ${PACKAGES}
 
 FROM scratch AS image
-ARG IMAGETYPE
+ARG FLAVOR
 COPY --link --from=install /target /
-COPY scripts/post-$IMAGETYPE.sh /post.sh
+COPY scripts/post-$FLAVOR.sh /post.sh
 RUN \
   . /post.sh; \
   install -dm1777 tmp; \
